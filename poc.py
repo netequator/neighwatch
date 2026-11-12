@@ -163,10 +163,12 @@ class NeighborTable:
         if pkt.eth_src != pkt.sha:
             return make_event(ts, "arp_hw_mismatch", "alert", pkt.spa, pkt.sha, base_detail)
 
-        # RFC 5227 ARP probes set sender protocol address to 0.0.0.0 for DAD;
+        # RFC 5227 ARP probes use op=who-has with sender protocol address 0.0.0.0;
         # record the probe without polluting 0.0.0.0 into IP->MAC bindings.
         if pkt.spa == "0.0.0.0":
-            return make_event(ts, "arp_probe", "info", pkt.spa, pkt.sha, base_detail)
+            if pkt.op == ARP_OP_REQUEST:
+                return make_event(ts, "arp_probe", "info", pkt.spa, pkt.sha, base_detail)
+            return make_event(ts, "arp_invalid_spa", "warn", pkt.spa, pkt.sha, base_detail)
 
         prev_mac = self.bindings.get(pkt.spa)
         gratuitous = pkt.spa == pkt.tpa
@@ -244,19 +246,18 @@ def resolve_scapy_datalink(sock: object) -> int | None:
 def run_live(iface: str, tracker: NeighborTable, count: int, timeout: float | None) -> int:
     # scapy.config reports use_pcap=False on Windows until scapy.all initializes Npcap.
     from scapy.all import conf, sniff  # type: ignore[import-untyped]
+    from scapy.error import Scapy_Exception  # type: ignore[import-untyped]
 
     if sys.platform == "win32" and not conf.use_pcap:
         raise RuntimeError("Npcap backend inactive (conf.use_pcap is False)")
 
-    sock = conf.L2listen(iface=iface, filter="arp")
+    bpf = "arp or (vlan and arp)"
     try:
-        datalink = resolve_scapy_datalink(sock)
-        if datalink != DLT_EN10MB:
-            raise ValueError(
-                f"interface {iface!r} uses datalink {datalink}; expected DLT_EN10MB ({DLT_EN10MB})"
-            )
-    finally:
-        sock.close()
+        # Open without BPF first; compiling "arp" on DLT_NULL loopback raises Scapy_Exception
+        # ("expression rejects all packets") before we can report the datalink mismatch.
+        sock = conf.L2listen(iface=iface)
+    except Scapy_Exception as exc:
+        raise RuntimeError(str(exc)) from exc
 
     frames = 0
 
@@ -269,14 +270,38 @@ def run_live(iface: str, tracker: NeighborTable, count: int, timeout: float | No
         if ev is not None:
             print(json.dumps(ev), flush=True)
 
-    sniff(
-        iface=iface,
-        filter="arp",
-        store=False,
-        prn=_on_packet,
-        count=count,
-        timeout=timeout,
-    )
+    try:
+        datalink = resolve_scapy_datalink(sock)
+        if datalink != DLT_EN10MB:
+            raise ValueError(
+                f"interface {iface!r} uses datalink {datalink}; expected DLT_EN10MB ({DLT_EN10MB})"
+            )
+
+        pcap_fd = getattr(sock, "pcap_fd", None)
+        if pcap_fd is not None:
+            pcap_fd.setfilter(bpf)
+            sniff(
+                opened_socket=sock,
+                store=False,
+                prn=_on_packet,
+                count=count,
+                timeout=timeout,
+            )
+        else:
+            sock.close()
+            sniff(
+                iface=iface,
+                filter=bpf,
+                store=False,
+                prn=_on_packet,
+                count=count,
+                timeout=timeout,
+            )
+    except Scapy_Exception as exc:
+        raise RuntimeError(str(exc)) from exc
+    finally:
+        sock.close()
+
     return frames
 
 
