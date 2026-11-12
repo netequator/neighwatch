@@ -38,3 +38,16 @@
 ### Verification
 - `ruff check poc.py`: passed (`0` errors).
 - Synthetic `.pcap` verification: verified normal 3-frame RFC 5227 burst emits zero flood alerts, single-IP/MAC burst (`8` frames) alerts once per window and re-alerts post-window, single-MAC multi-IP spray triggers `flood_scope="mac"`, rotating-MAC flood attaches `flood=True` to `arp_mac_change`, `--garp-threshold 0` disables flood detection, and negative threshold fails with exit code `2`.
+
+## 2026-11-12 — Issue #2: Neighbor State Persistence & TTL Eviction
+
+### Design Notes
+- Replaced flat `IP -> MAC` string dictionary with `NeighborEntry(mac, first_seen, last_seen)` while preserving `bindings` property compatibility.
+- Added `--state-file` (`load_state` / atomic `save_state` via temp file + `Path.replace` on normal exit and `KeyboardInterrupt`). Malformed JSON or invalid top-level type fails fast with exit code `2` instead of overwriting existing baseline files.
+- Added `--ttl` (seconds, default `0.0` disabled). `prune_stale(ts)` evaluates `ts - entry.last_seen > ttl` against packet timestamps (`pkt.time` / PCAP header timestamps) before frame decoding so offline `.pcap` replay stays deterministic; evicted entries emit `arp_expired` (`info`) and re-learn cleanly if seen again.
+- Updated `process_frame` to return `list[dict[str, object]]` so zero, one, or multiple events (expired entries followed by frame event) stream cleanly in JSONL order.
+- Preserved security invariant: `arp_hw_mismatch` (`eth_src != sha`) and `0.0.0.0` probes do not refresh `last_seen`.
+
+### Verification
+- `ruff check poc.py`: passed (`0` errors).
+- Synthetic `.pcap` verification: verified TTL eviction (`arp_expired` with `inactive_sec`, subsequent re-learning without false `arp_mac_change`), negative TTL exit `2`, state dump/reload cycle detecting `arp_mac_change` against persisted baseline, and malformed/wrong-type state file exit `2`.
