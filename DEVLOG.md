@@ -65,3 +65,27 @@
 - Windows test: `poc.py -i <iface> --backend native` exits `2` with `error: native AF_PACKET backend is only supported on Linux`.
 - Linux (WSL2 Ubuntu) test: `python3 poc.py -i lo` exits `2` with `error: raw capture on interface 'lo' requires CAP_NET_RAW capability or root privileges`. Offline PCAP replay runs identically with zero external dependencies.
 - Synthetic PCAP test suite (`verify_neighwatch.py`): passed across all cases.
+
+
+## 2026-11-13 — Issue #5: Modular Package Extraction and Pytest Suite
+
+### Design Notes
+- Extracted `poc.py` monolith into modular `neighwatch/` package layout:
+  - `neighwatch/parser.py`: wire-format Ethernet/802.1Q/ARP parsing (`parse_ethernet_arp`), protocol constants, and JSONL event builders.
+  - `neighwatch/table.py`: `NeighborTable` binding state machine, RFC 5227 probe exclusion, spoof detection, TTL expiration, and atomic JSON state persistence.
+  - `neighwatch/window.py`: `SlidingWindowCounter` with packet-timestamp sliding window and per-key cooldown.
+  - `neighwatch/capture.py`: zero-dependency classic `.pcap` streaming reader and dual capture engines (Windows Scapy/Npcap and Linux `AF_PACKET`).
+  - `neighwatch/cli.py`: command-line argument parsing and daemon runtime loop.
+  - `neighwatch/__main__.py`: standard executable package entrypoint (`python -m neighwatch`).
+- Preserved `poc.py` as backward-compatible CLI shim re-exporting public primitives for legacy test harnesses.
+- Added `pyproject.toml` with setuptools packaging metadata, optional dependencies (`scapy`, `pytest`, `ruff`), and `neighwatch` console script.
+- Replaced ad-hoc verification scripts with formal, deterministic `pytest` suite under `tests/`:
+  - `tests/test_parser.py`: validates request/reply decoding, 802.1Q VLAN tags, 60-byte padding, truncated frames, non-ARP EtherTypes, and MAC/timestamp formatters.
+  - `tests/test_window.py`: validates rate thresholds, per-key cooldowns, sliding-window packet expiry, and counter disable flags.
+  - `tests/test_table.py`: validates initial learning, `arp_seen` emission, MAC change alerts, RFC 5227 probe exclusion, hardware mismatch alerts, TTL eviction, and state file serialization.
+  - `tests/test_pcap.py`: validates little-endian/microsecond and big-endian/nanosecond classic `.pcap` decoding, link-type checks, and offline PCAP replay.
+
+### Verification
+- `ruff check neighwatch tests poc.py`: passed (`0` errors).
+- `pytest tests/ -v`: 23 passed in 0.23s.
+- Tested `python -m neighwatch --help` and `python poc.py --help`: both display clean usage and exit 0.

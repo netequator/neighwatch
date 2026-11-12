@@ -1,0 +1,1 @@
+"""neighwatch automated test suite."""
