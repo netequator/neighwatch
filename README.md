@@ -8,23 +8,41 @@ Current stage: `PoC` (`poc.py`).
 
 ## USAGE
 
-Read an offline classic `.pcap` file (pure Python stdlib, no runtime dependencies):
+Read an offline classic `.pcap` file (pure Python stdlib, zero third-party dependencies):
 
-```powershell
-python poc.py --pcap capture.pcap
+```sh
+python3 poc.py --pcap capture.pcap
 ```
 
-Capture live ARP traffic via Scapy and Npcap (`Windows`) or `AF_PACKET` (`Linux/WSL2`):
+Capture live ARP traffic on Linux via zero-dependency native `AF_PACKET` raw sockets (requires `CAP_NET_RAW` or root):
 
-```powershell
-python poc.py --iface "vEthernet (WSL)" --timeout 10
+```sh
+# Grant cap_net_raw to python binary for unprivileged capture:
+sudo setcap cap_net_raw=eip $(which python3)
+python3 poc.py --iface eth0 --state-file /var/lib/neighwatch/state.json --ttl 86400
 ```
 
-Include unchanged repeat observations with `--all`, tune gratuitous ARP flood detection (`--garp-window 10 --garp-threshold 5`, `0` disables), or persist baseline state with stale-entry eviction (`--state-file`, `--ttl` in seconds):
+Capture live ARP traffic on Windows via Scapy and Npcap:
 
 ```powershell
-python poc.py --pcap capture.pcap --garp-window 5 --garp-threshold 4
 python poc.py --iface "vEthernet (WSL)" --state-file state.json --ttl 3600
+```
+
+Tune gratuitous ARP flood detection (`--garp-window 10 --garp-threshold 5`, `0` disables) or backend selection (`--backend auto|native|scapy`):
+
+```sh
+python3 poc.py --iface eth0 --garp-window 5 --garp-threshold 4 --backend native
+```
+
+## SYSTEMD DAEMON (LINUX)
+
+A hardened systemd unit file is provided at `systemd/neighwatch.service`. It runs under `DynamicUser=yes` with ambient `CAP_NET_RAW` capabilities, sandbox isolation (`ProtectSystem=strict`, `ProtectHome=yes`, `NoNewPrivileges=yes`), and streams structured JSONL events directly into `journald`:
+
+```sh
+sudo cp systemd/neighwatch.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now neighwatch
+journalctl -u neighwatch -f -o cat
 ```
 
 ## LIMITATIONS

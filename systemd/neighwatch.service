@@ -1,0 +1,32 @@
+[Unit]
+Description=neighwatch Layer 2 ARP Neighbor Monitor Daemon
+Documentation=https://github.com/netequator/neighwatch
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 /opt/neighwatch/poc.py -i eth0 --state-file /var/lib/neighwatch/state.json --ttl 86400
+Restart=always
+RestartSec=5s
+
+# Run unprivileged with ambient capability for native AF_PACKET raw capture
+DynamicUser=yes
+AmbientCapabilities=CAP_NET_RAW
+CapabilityBoundingSet=CAP_NET_RAW
+
+# Hardening / Sandboxing
+StateDirectory=neighwatch
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectControlGroups=yes
+NoNewPrivileges=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+
+# Log output directly to systemd journal in structured JSONL format
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

@@ -51,3 +51,17 @@
 ### Verification
 - `ruff check poc.py`: passed (`0` errors).
 - Synthetic `.pcap` verification: verified TTL eviction (`arp_expired` with `inactive_sec`, subsequent re-learning without false `arp_mac_change`), negative TTL exit `2`, state dump/reload cycle detecting `arp_mac_change` against persisted baseline, and malformed/wrong-type state file exit `2`.
+
+## 2026-11-12 — Issue #6: Native Linux AF_PACKET & Systemd Daemon
+
+### Design Notes
+- Added zero-dependency Linux live capture via `socket.socket(socket.AF_PACKET, socket.SOCK_RAW, socket.htons(0x0806))` bound to the target interface.
+- Added `--backend {auto,native,scapy}`. In `auto` mode, Linux hosts automatically use stdlib `AF_PACKET` without requiring Scapy installed; Windows hosts route to Scapy/Npcap.
+- Captured `PermissionError` when binding raw sockets on Linux, printing an actionable message explaining `CAP_NET_RAW` capability or root requirements.
+- Added hardened `systemd/neighwatch.service` unit with `DynamicUser=yes`, `AmbientCapabilities=CAP_NET_RAW`, `StateDirectory=neighwatch`, and strict filesystem sandboxing.
+
+### Verification
+- `ruff check poc.py`: passed (`0` errors).
+- Windows test: `poc.py -i <iface> --backend native` exits `2` with `error: native AF_PACKET backend is only supported on Linux`.
+- Linux (WSL2 Ubuntu) test: `python3 poc.py -i lo` exits `2` with `error: raw capture on interface 'lo' requires CAP_NET_RAW capability or root privileges`. Offline PCAP replay runs identically with zero external dependencies.
+- Synthetic PCAP test suite (`verify_neighwatch.py`): passed across all cases.

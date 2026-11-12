@@ -458,7 +458,64 @@ def resolve_scapy_datalink(sock: object) -> int | None:
     return None
 
 
-def run_live(iface: str, tracker: NeighborTable, count: int, timeout: float | None) -> int:
+def run_live_native_linux(
+    iface: str,
+    tracker: NeighborTable,
+    count: int = 0,
+    timeout: float | None = None,
+) -> int:
+    """Zero-dependency live ARP capture on Linux using native AF_PACKET raw socket."""
+    if not hasattr(socket, "AF_PACKET"):
+        raise RuntimeError("native AF_PACKET backend is only supported on Linux")
+
+    eth_p_arp = 0x0806
+    try:
+        sock = socket.socket(socket.AF_PACKET, socket.SOCK_RAW, socket.htons(eth_p_arp))
+    except PermissionError as exc:
+        raise PermissionError(
+            f"raw capture on interface {iface!r} requires CAP_NET_RAW capability or root privileges"
+        ) from exc
+    except OSError as exc:
+        raise OSError(f"failed to open AF_PACKET socket: {exc}") from exc
+
+    try:
+        sock.bind((iface, socket.htons(eth_p_arp)))
+    except OSError as exc:
+        sock.close()
+        raise OSError(f"failed to bind to interface {iface!r}: {exc}") from exc
+
+    frames = 0
+    start_time = datetime.now(UTC).timestamp()
+
+    try:
+        while True:
+            if count > 0 and frames >= count:
+                break
+            if timeout is not None and timeout > 0:
+                elapsed = datetime.now(UTC).timestamp() - start_time
+                if elapsed >= timeout:
+                    break
+                sock.settimeout(max(0.01, timeout - elapsed))
+
+            try:
+                raw_frame = sock.recv(2048)
+            except TimeoutError:
+                break
+
+            if not raw_frame:
+                break
+
+            frames += 1
+            now = datetime.now(UTC).timestamp()
+            for ev in tracker.process_frame(raw_frame, now, DLT_EN10MB):
+                print(json.dumps(ev), flush=True)
+    finally:
+        sock.close()
+
+    return frames
+
+
+def run_live_scapy(iface: str, tracker: NeighborTable, count: int, timeout: float | None) -> int:
     # scapy.config reports use_pcap=False on Windows until scapy.all initializes Npcap.
     from scapy.all import conf, sniff  # type: ignore[import-untyped]
     from scapy.error import Scapy_Exception  # type: ignore[import-untyped]
@@ -519,6 +576,25 @@ def run_live(iface: str, tracker: NeighborTable, count: int, timeout: float | No
     return frames
 
 
+def run_live(
+    iface: str,
+    tracker: NeighborTable,
+    count: int = 0,
+    timeout: float | None = None,
+    backend: str = "auto",
+) -> int:
+    if backend == "auto":
+        backend = "native" if hasattr(socket, "AF_PACKET") else "scapy"
+
+    if backend == "native":
+        if not hasattr(socket, "AF_PACKET"):
+            raise RuntimeError("native AF_PACKET backend is only supported on Linux")
+        return run_live_native_linux(iface, tracker, count=count, timeout=timeout)
+    if backend == "scapy":
+        return run_live_scapy(iface, tracker, count=count, timeout=timeout)
+    raise ValueError(f"unknown backend {backend!r}; choose 'auto', 'native', or 'scapy'")
+
+
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         prog="neighwatch",
@@ -559,6 +635,12 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         default=0.0,
         help="Entry time-to-live in seconds; evicts stale bindings (default: 0.0, disabled).",
     )
+    parser.add_argument(
+        "--backend",
+        choices=["auto", "native", "scapy"],
+        default="auto",
+        help="Live capture backend: 'auto' (native on Linux, scapy on Windows), 'native' (AF_PACKET), or 'scapy' (default: auto).",
+    )
     return parser.parse_args(argv)
 
 
@@ -578,7 +660,13 @@ def main(argv: list[str] | None = None) -> int:
         if args.pcap is not None:
             frames = run_pcap(args.pcap, tracker)
         else:
-            frames = run_live(args.iface, tracker, count=args.count, timeout=args.timeout)
+            frames = run_live(
+                args.iface,
+                tracker,
+                count=args.count,
+                timeout=args.timeout,
+                backend=args.backend,
+            )
     except KeyboardInterrupt:
         if args.state_file is not None:
             try:
