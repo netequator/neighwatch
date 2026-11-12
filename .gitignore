@@ -1,0 +1,9 @@
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pcap
+*.pcapng
+*.jsonl
+.pytest_cache/
+.ruff_cache/
