@@ -26,9 +26,15 @@
 - Live Npcap checks on Windows 10: verified clean datalink rejection on `Loopback Pseudo-Interface 1` (`exit 2`), clean error on invalid interface name (`exit 2`), and live capture of an ARP request across `vEthernet (WSL)`.
 
 ### Next Steps / Planned Issues
-- File initial GitHub issues once remote repo creation is confirmed by Director:
-  1. `gratuitous arp flood rate-window alert`
-  2. `persist ip-mac neighbor table state with entry ttl`
-  3. `add ipv6 ndp (ns/na) and dad tracking`
-  4. `support pcapng interface description blocks`
-  5. `extract neighbor table module and add pytest suite`
+- Tracked on GitHub (`netequator/neighwatch`): `#1`..`#5`.
+
+## 2026-11-12 — Issue #1: Gratuitous ARP Flood Sliding Window
+
+### Design Notes
+- Added `SlidingWindowCounter` driven by packet timestamps (`pkt.time` / PCAP header timestamps) rather than wall clock so offline replay stays deterministic.
+- Keyed gratuitous (`spa == tpa`, `spa != 0.0.0.0`) counts by both `ip:<spa>` and `mac:<sha>` (with `max_keys=4096` stale/FIFO eviction) to catch single-target floods, rotating-MAC spoofs against one IP, and single-NIC multi-IP cache spray.
+- Default `--garp-window 10.0` and `--garp-threshold 5` sit above normal RFC 5227 §2.3 announcement bursts (`ANNOUNCE_NUM = 2`, `ANNOUNCE_INTERVAL = 2s`); per-key cooldown (`window_sec`) suppresses duplicate flood alerts during sustained bursts while preserving `arp_mac_change` priority if a MAC flip occurs concurrently.
+
+### Verification
+- `ruff check poc.py`: passed (`0` errors).
+- Synthetic `.pcap` verification: verified normal 3-frame RFC 5227 burst emits zero flood alerts, single-IP/MAC burst (`8` frames) alerts once per window and re-alerts post-window, single-MAC multi-IP spray triggers `flood_scope="mac"`, rotating-MAC flood attaches `flood=True` to `arp_mac_change`, `--garp-threshold 0` disables flood detection, and negative threshold fails with exit code `2`.

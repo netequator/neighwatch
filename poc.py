@@ -7,6 +7,7 @@ import json
 import socket
 import struct
 import sys
+from collections import deque
 from collections.abc import Iterator
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -125,12 +126,97 @@ def parse_ethernet_arp(frame: bytes) -> tuple[ArpPacket | None, str | None]:
     )
 
 
+class SlidingWindowCounter:
+    """Bounded packet-timestamp sliding window counter with per-key alert cooldown."""
+
+    def __init__(self, window_sec: float, max_keys: int = 4096) -> None:
+        self.window_sec = window_sec
+        self.max_keys = max_keys
+        self._events: dict[str, deque[float]] = {}
+        self._last_alert: dict[str, float] = {}
+
+    def record(self, key: str, ts: float, threshold: int) -> tuple[int, bool, bool]:
+        """Record packet timestamp for key; return (count_in_window, triggered, in_cooldown)."""
+        if self.window_sec <= 0 or threshold <= 0:
+            return 0, False, False
+
+        cutoff = ts - self.window_sec
+        dq = self._events.get(key)
+        if dq is None:
+            if len(self._events) >= self.max_keys:
+                self._evict_stale(cutoff)
+            if len(self._events) >= self.max_keys:
+                oldest_key = next(iter(self._events))
+                del self._events[oldest_key]
+                self._last_alert.pop(oldest_key, None)
+            dq = deque()
+            self._events[key] = dq
+
+        dq.append(ts)
+        while dq and dq[0] < cutoff:
+            dq.popleft()
+
+        count = len(dq)
+        if count < threshold:
+            return count, False, False
+
+        last = self._last_alert.get(key)
+        if last is not None and (ts - last) < self.window_sec:
+            return count, False, True
+
+        self._last_alert[key] = ts
+        return count, True, False
+
+    def _evict_stale(self, cutoff: float) -> None:
+        stale = [k for k, dq in self._events.items() if not dq or dq[-1] < cutoff]
+        for k in stale:
+            del self._events[k]
+            self._last_alert.pop(k, None)
+
+
 class NeighborTable:
     """In-memory IP-to-MAC tracker emitting normalized JSONL neighbor events."""
 
-    def __init__(self, emit_unchanged: bool = False) -> None:
+    def __init__(
+        self,
+        emit_unchanged: bool = False,
+        garp_window: float = 10.0,
+        garp_threshold: int = 5,
+    ) -> None:
+        if garp_threshold < 0:
+            raise ValueError("garp_threshold must be >= 0")
+        if garp_threshold > 0 and garp_window <= 0:
+            raise ValueError("garp_window must be > 0 when garp_threshold > 0")
+
         self.bindings: dict[str, str] = {}
         self.emit_unchanged = emit_unchanged
+        self.garp_window = garp_window
+        self.garp_threshold = garp_threshold
+        self._garp_counter = SlidingWindowCounter(window_sec=garp_window)
+
+    def _record_gratuitous(self, spa: str, sha: str, ts: float) -> tuple[bool, bool, dict[str, object]]:
+        ip_count, ip_trig, ip_cool = self._garp_counter.record(f"ip:{spa}", ts, self.garp_threshold)
+        mac_count, mac_trig, mac_cool = self._garp_counter.record(f"mac:{sha}", ts, self.garp_threshold)
+
+        scopes: list[str] = []
+        if ip_trig:
+            scopes.append("ip")
+        if mac_trig:
+            scopes.append("mac")
+
+        triggered = bool(scopes)
+        in_cooldown = (not triggered) and (ip_cool or mac_cool)
+        meta: dict[str, object] = {}
+        if triggered or in_cooldown:
+            meta = {
+                "window_sec": self.garp_window,
+                "threshold": self.garp_threshold,
+                "ip_count": ip_count,
+                "mac_count": mac_count,
+            }
+            if scopes:
+                meta["flood_scope"] = "+".join(scopes)
+        return triggered, in_cooldown, meta
 
     def process_frame(self, frame: bytes, ts: float, linktype: int) -> dict[str, object] | None:
         if linktype != DLT_EN10MB:
@@ -172,15 +258,28 @@ class NeighborTable:
 
         prev_mac = self.bindings.get(pkt.spa)
         gratuitous = pkt.spa == pkt.tpa
+        flood_triggered = False
+        flood_cooldown = False
+        flood_meta: dict[str, object] = {}
+        if gratuitous:
+            flood_triggered, flood_cooldown, flood_meta = self._record_gratuitous(pkt.spa, pkt.sha, ts)
 
         if prev_mac is not None and prev_mac != pkt.sha:
             self.bindings[pkt.spa] = pkt.sha
             detail = {**base_detail, "prev_mac": prev_mac, "gratuitous": gratuitous}
+            if flood_triggered:
+                detail["flood"] = True
+                detail.update(flood_meta)
             return make_event(ts, "arp_mac_change", "alert", pkt.spa, pkt.sha, detail)
 
         if gratuitous:
             already_known = prev_mac is not None
             self.bindings[pkt.spa] = pkt.sha
+            if flood_triggered:
+                detail = {**base_detail, "already_known": already_known, **flood_meta}
+                return make_event(ts, "arp_gratuitous_flood", "alert", pkt.spa, pkt.sha, detail)
+            if flood_cooldown and not self.emit_unchanged:
+                return None
             detail = {**base_detail, "already_known": already_known}
             return make_event(ts, "arp_gratuitous", "info", pkt.spa, pkt.sha, detail)
 
@@ -321,13 +420,29 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument("-c", "--count", type=int, default=0, help="Live capture frame limit (0 = unlimited).")
     parser.add_argument("-t", "--timeout", type=float, default=None, help="Live capture timeout in seconds.")
+    parser.add_argument(
+        "--garp-window",
+        type=float,
+        default=10.0,
+        help="Sliding window in seconds for gratuitous ARP flood detection (default: 10.0).",
+    )
+    parser.add_argument(
+        "--garp-threshold",
+        type=int,
+        default=5,
+        help="Gratuitous ARP count in window before alerting; 0 disables (default: 5).",
+    )
     return parser.parse_args(argv)
 
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
-    tracker = NeighborTable(emit_unchanged=args.emit_unchanged)
     try:
+        tracker = NeighborTable(
+            emit_unchanged=args.emit_unchanged,
+            garp_window=args.garp_window,
+            garp_threshold=args.garp_threshold,
+        )
         if args.pcap is not None:
             frames = run_pcap(args.pcap, tracker)
         else:
