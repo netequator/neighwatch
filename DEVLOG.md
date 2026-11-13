@@ -89,3 +89,16 @@
 - `ruff check neighwatch tests poc.py`: passed (`0` errors).
 - `pytest tests/ -v`: 23 passed in 0.23s.
 - Tested `python -m neighwatch --help` and `python poc.py --help`: both display clean usage and exit 0.
+
+
+## 2026-11-13 — Documentation Refinement & Visual Assets
+
+### Design Notes
+- Created dark-mode monochrome vector assets under `assets/`:
+  - `assets/logo.svg`: 256x256 square Layer 2 topology and radar reticle icon with learned/monitored nodes.
+  - `assets/header.svg`: 840x220 terminal window banner displaying live daemon command invocation, package metadata, and wire-level protocol inspector card matching the portfolio design language.
+- Refined `README.md` to BSD/Linux man-page specification:
+  - Documented explicit threat model: silent MAC flaps, RFC 5227 DAD probe isolation, and ARP cache spraying.
+  - Added ASCII architectural pipeline diagram mapping frame ingestion to structured JSONL streaming.
+  - Documented complete normalized JSONL event schema and event type classification table.
+  - Added step-by-step unprivileged Linux deployment guide with ambient `CAP_NET_RAW` systemd units and `journalctl` query examples.

@@ -1,0 +1,63 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 840 220" width="840" height="220" role="img" aria-label="neighwatch - Passive L2 ARP Neighbor Monitor and Spoof Detector">
+  <defs>
+    <pattern id="grid" width="28" height="28" patternUnits="userSpaceOnUse">
+      <path d="M 28 0 L 0 0 0 28" fill="none" stroke="#161b22" stroke-width="1"/>
+    </pattern>
+    <clipPath id="card-body">
+      <rect x="2" y="39" width="836" height="179" rx="7"/>
+    </clipPath>
+  </defs>
+
+  <!-- Container Base -->
+  <rect x="1" y="1" width="838" height="218" rx="8" fill="#0d1117" stroke="#30363d" stroke-width="1.5"/>
+  <rect x="2" y="39" width="836" height="179" fill="url(#grid)" opacity="0.6" clip-path="url(#card-body)"/>
+
+  <!-- Terminal Window Bar -->
+  <line x1="1" y1="39" x2="839" y2="39" stroke="#21262d" stroke-width="1"/>
+  <circle cx="24" cy="20" r="4.5" fill="#21262d" stroke="#30363d" stroke-width="1"/>
+  <circle cx="40" cy="20" r="4.5" fill="#21262d" stroke="#30363d" stroke-width="1"/>
+  <circle cx="56" cy="20" r="4.5" fill="#21262d" stroke="#30363d" stroke-width="1"/>
+  <text x="814" y="24" text-anchor="end" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace" font-size="11.5" fill="#6e7681">~/neighwatch (main)</text>
+
+  <!-- Left Content Block -->
+  <text x="34" y="72" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace" font-size="12">
+    <tspan fill="#3fb950">$</tspan>
+    <tspan dx="6" fill="#8b949e">neighwatch --iface eth0 --state-file state.json --ttl 86400</tspan>
+  </text>
+
+  <text x="34" y="112" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif">
+    <tspan font-size="32" font-weight="700" fill="#f0f6fc">neighwatch</tspan>
+    <tspan dx="10" font-size="14" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace" fill="#58a6ff">v0.1.0.dev0</tspan>
+  </text>
+
+  <text x="34" y="142" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="15" font-weight="500" fill="#c9d1d9">
+    Passive Layer 2 ARP Neighbor Monitor &amp; Spoof Detector
+  </text>
+
+  <text x="34" y="174" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace" font-size="11.5" fill="#8b949e">
+    native AF_PACKET / Npcap / JSONL events / sliding flood windows / zero-dependency Linux
+  </text>
+
+  <!-- Right Inspector Card -->
+  <rect x="526" y="52" width="282" height="148" rx="6" fill="#161b22" stroke="#30363d" stroke-width="1"/>
+
+  <g font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace" font-size="11">
+    <text x="542" y="76" fill="#6e7681">DATALINK</text>
+    <text x="618" y="76" fill="#e6edf3">DLT_EN10MB (Ethernet)</text>
+
+    <text x="542" y="98" fill="#6e7681">PROTOCOL</text>
+    <text x="618" y="98" fill="#e6edf3">ARP (0x0806) + 802.1Q</text>
+
+    <text x="542" y="120" fill="#6e7681">PARSER</text>
+    <text x="618" y="120" fill="#3fb950">Pure Stdlib struct</text>
+
+    <text x="542" y="142" fill="#6e7681">SECURITY</text>
+    <text x="618" y="142" fill="#58a6ff">RFC 5227 / HW Verify</text>
+
+    <text x="542" y="164" fill="#6e7681">BACKEND</text>
+    <text x="618" y="164" fill="#e6edf3">Linux AF_PACKET / Npcap</text>
+
+    <text x="542" y="186" fill="#6e7681">TELEMETRY</text>
+    <text x="618" y="186" fill="#3fb950">Structured JSONL</text>
+  </g>
+</svg>

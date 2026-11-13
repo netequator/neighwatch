@@ -1,20 +1,115 @@
-# neighwatch
+<p align="center">
+  <img src="assets/header.svg" alt="neighwatch - Passive Layer 2 ARP Neighbor Monitor and Spoof Detector" width="100%" />
+</p>
 
 ## OVERVIEW
 
-Passive Layer 2 ARP neighbor monitor maintaining an in-memory `IP -> MAC` binding table. Emits normalized JSONL events for learned neighbors, MAC flaps, Ethernet/ARP hardware mismatches, RFC 5227 probes (`0.0.0.0`), and gratuitous ARP frames.
+`neighwatch` is a passive Layer 2 ARP neighbor monitor and spoof detector. It inspects Ethernet and ARP wire frames, tracks an in-memory `IP -> MAC` binding table, evaluates packet-timestamp sliding windows for gratuitous ARP floods, and emits normalized JSONL events to `stdout`.
 
-Current stage: `v0.1.0.dev0` modular package (`neighwatch/`) with backward-compatible `poc.py` CLI shim.
+### Threat Model & Detection Surface
 
-## USAGE
+- **Silent MAC Flaps:** Detects when an existing IP binding is claimed by a new hardware address (`arp_mac_change`), characteristic of ARP cache poisoning and MITM gateway impersonation.
+- **Hardware Address Mismatches:** Inspects both the outer Ethernet frame source (`eth_src`) and the inner ARP sender hardware address (`sha`). Inconsistencies (`arp_hw_mismatch`) trigger immediate alerts and are quarantined from updating the trusted table.
+- **RFC 5227 Probe Isolation:** Tracks Duplicate Address Detection (DAD) probes (`spa == 0.0.0.0`) as informational events (`arp_probe`) without polluting `0.0.0.0` into the active neighbor table.
+- **Gratuitous ARP Floods:** Measures burst frequency over sliding time windows across both IP and MAC scopes, isolating cache-spray attacks (`arp_gratuitous_flood`) with per-key alert cooldowns.
+- **Stale Neighbor Eviction:** Prunes inactive bindings based on elapsed packet capture time (`--ttl`), emitting structured expiration records (`arp_expired`).
 
-Install in editable mode:
+---
+
+## ARCHITECTURE
+
+```
+                  +-----------------------------------+
+                  |   Capture Source (pcap / live)    |
+                  +-----------------------------------+
+                                    |
+                                    v
++-------------------------------------------------------------------------+
+| neighwatch.parser: parse_ethernet_arp()                                 |
+| - Link-type validation (DLT_EN10MB)                                     |
+| - 802.1Q / 802.1ad VLAN unwrapping (up to 2 tags)                       |
+| - Fixed 28-byte ARP header unpacking                                    |
+| - Trailing 60-byte Ethernet padding truncation                          |
++-------------------------------------------------------------------------+
+                                    |
+                                    v
++-------------------------------------------------------------------------+
+| neighwatch.table: NeighborTable.process_frame()                         |
+| - RFC 5227 probe filtering (0.0.0.0)                                    |
+| - Hardware address invariant checks (eth_src == sha)                    |
+| - In-memory binding state machine (first_seen, last_seen)               |
+| - Sliding-window gratuitous flood counter (neighwatch.window)           |
+| - Packet-timestamp TTL eviction (prune_stale)                           |
++-------------------------------------------------------------------------+
+                                    |
+                                    v
+                  +-----------------------------------+
+                  |    Structured JSONL Output Stream |
+                  +-----------------------------------+
+```
+
+### Event Schema
+
+Every event is serialized as a single-line JSON object with deterministic keys:
+
+| Field | Type | Description |
+| :--- | :--- | :--- |
+| `ts` | `string` | ISO-8601 UTC timestamp (`YYYY-MM-DDTHH:MM:SS.ffffffZ`) |
+| `tool` | `string` | Always `"neighwatch"` |
+| `event` | `string` | Event classifier (e.g. `arp_learned`, `arp_mac_change`) |
+| `severity` | `string` | `"info"`, `"warn"`, or `"alert"` |
+| `src_ip` | `string|null` | Sender protocol IPv4 address (`spa`) |
+| `src_mac` | `string|null` | Sender hardware MAC address (`sha`) |
+| `detail` | `object` | Contextual dictionary (operation, target addresses, VLAN tags, flood counters) |
+
+#### Event Types
+
+- `arp_learned` (`info`): Newly observed valid IP-to-MAC mapping.
+- `arp_seen` (`info`): Known binding re-observed (emitted when `--all` is set).
+- `arp_mac_change` (`alert`): Known IP address claimed by a different MAC address.
+- `arp_hw_mismatch` (`alert`): Outer Ethernet frame source does not match inner ARP hardware address.
+- `arp_gratuitous_flood` (`alert`): Gratuitous ARP burst exceeded rate threshold within window.
+- `arp_gratuitous` (`info`): Unchanged or unthrottled gratuitous ARP announcement.
+- `arp_probe` (`info`): Valid RFC 5227 IPv4 address conflict detection probe (`spa=0.0.0.0`).
+- `arp_invalid_spa` (`warn`): ARP reply claiming sender protocol address `0.0.0.0`.
+- `arp_invalid_sha` (`warn`): ARP packet claiming broadcast (`ff:ff:ff:ff:ff:ff`), zero, or multicast MAC.
+- `arp_unexpected_op` (`warn`): ARP opcode other than `1` (`who-has`) or `2` (`is-at`).
+- `arp_expired` (`info`): Stale neighbor evicted after exceeding configured `--ttl`.
+- `arp_malformed` (`warn`): Truncated Ethernet header or undersized ARP payload.
+
+---
+
+## BUILD & INSTALLATION
+
+`neighwatch` requires **Python 3.10+**.
+
+### Linux (Zero External Dependencies)
+
+On Linux, `neighwatch` uses standard library raw sockets (`AF_PACKET`) and requires no third-party packages:
 
 ```sh
+git clone https://github.com/netequator/neighwatch.git
+cd neighwatch
 pip install -e .
 ```
 
-Read an offline classic `.pcap` file (pure Python stdlib, zero third-party dependencies):
+### Windows (Npcap / Scapy)
+
+On Windows, install with the optional packet capture extra:
+
+```powershell
+pip install -e ".[pcap]"
+```
+
+Ensure Npcap is installed with "WinPcap API-compatible mode" enabled.
+
+---
+
+## USAGE
+
+### 1. Offline Classic PCAP Replay
+
+Replay an existing packet capture with pure stdlib stream decoding:
 
 ```sh
 neighwatch --pcap capture.pcap
@@ -22,27 +117,91 @@ neighwatch --pcap capture.pcap
 python3 -m neighwatch --pcap capture.pcap
 ```
 
-Capture live ARP traffic on Linux via zero-dependency native `AF_PACKET` raw sockets (requires `CAP_NET_RAW` or root):
+### 2. Live Linux Capture (Native `AF_PACKET`)
+
+Capture live ARP frames without root privileges using Linux ambient capabilities:
 
 ```sh
-# Grant cap_net_raw to python binary for unprivileged capture:
+# Grant CAP_NET_RAW capability to python binary once:
 sudo setcap cap_net_raw=eip $(which python3)
+
+# Run unprivileged monitor with persistent state and 24-hour TTL:
 neighwatch --iface eth0 --state-file /var/lib/neighwatch/state.json --ttl 86400
 ```
 
-Capture live ARP traffic on Windows via Scapy and Npcap:
+### 3. Live Windows Capture (Npcap)
 
 ```powershell
 python -m neighwatch --iface "vEthernet (WSL)" --state-file state.json --ttl 3600
 ```
 
-Tune gratuitous ARP flood detection (`--garp-window 10 --garp-threshold 5`, `0` disables) or backend selection (`--backend auto|native|scapy`):
+### 4. CLI Reference
 
-```sh
-neighwatch --iface eth0 --garp-window 5 --garp-threshold 4 --backend native
+| Flag | Argument | Description | Default |
+| :--- | :--- | :--- | :--- |
+| `-r`, `--pcap` | `PATH` | Read offline classic `.pcap` file | `None` |
+| `-i`, `--iface` | `NAME` | Capture live ARP frames on interface | `None` |
+| `--all` | - | Emit `arp_seen` events for unchanged known bindings | `False` |
+| `-c`, `--count` | `INT` | Live capture frame limit (`0` = unlimited) | `0` |
+| `-t`, `--timeout` | `FLOAT` | Live capture timeout in seconds | `None` |
+| `-s`, `--state-file` | `PATH` | JSON file path to load and persist neighbor state | `None` |
+| `--ttl` | `FLOAT` | Entry time-to-live in seconds (`0` = disabled) | `0.0` |
+| `--garp-window` | `FLOAT` | Gratuitous ARP flood detection window in seconds | `10.0` |
+| `--garp-threshold`| `INT` | Gratuitous ARP count before alert (`0` = disabled) | `5` |
+| `--backend` | `CHOICE` | Backend engine: `auto`, `native` (`AF_PACKET`), `scapy` | `auto` |
+
+---
+
+## SYSTEMD DAEMON (LINUX)
+
+A production-grade systemd service unit is included at [systemd/neighwatch.service](systemd/neighwatch.service). It runs under a dynamic unprivileged user with strictly bounded ambient capabilities (`CAP_NET_RAW`) and comprehensive filesystem isolation:
+
+```ini
+[Unit]
+Description=neighwatch Layer 2 ARP Neighbor Monitor Daemon
+Documentation=https://github.com/netequator/neighwatch
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/neighwatch -i eth0 --state-file /var/lib/neighwatch/state.json --ttl 86400
+Restart=always
+RestartSec=5s
+
+DynamicUser=yes
+AmbientCapabilities=CAP_NET_RAW
+CapabilityBoundingSet=CAP_NET_RAW
+
+StateDirectory=neighwatch
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectControlGroups=yes
+NoNewPrivileges=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
 ```
 
-## TESTING
+### Deployment
+
+```sh
+sudo cp systemd/neighwatch.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now neighwatch
+
+# Stream structured JSONL alerts in real time:
+journalctl -u neighwatch -f -o cat | jq .
+```
+
+---
+
+## TESTING & VERIFICATION
 
 Run the deterministic test suite:
 
@@ -56,24 +215,25 @@ Run static analysis:
 ruff check .
 ```
 
-## SYSTEMD DAEMON (LINUX)
+The test harness uses synthetic binary frame generation (`struct.pack`) across 4 test modules:
+- `tests/test_parser.py`: Frame parsing, 802.1Q VLAN unwrapping, and 60-byte padding truncation.
+- `tests/test_window.py`: Rate-limiting counters, sliding windows, and alert cooldowns.
+- `tests/test_table.py`: Neighbor learning, MAC flaps, RFC 5227 probes, hardware mismatches, and state serialization.
+- `tests/test_pcap.py`: Endianness, microsecond/nanosecond header decoding, and PCAP stream iteration.
 
-A hardened systemd unit file is provided at `systemd/neighwatch.service`. It runs under `DynamicUser=yes` with ambient `CAP_NET_RAW` capabilities, sandbox isolation (`ProtectSystem=strict`, `ProtectHome=yes`, `NoNewPrivileges=yes`), and streams structured JSONL events directly into `journald`:
-
-```sh
-sudo cp systemd/neighwatch.service /etc/systemd/system/
-sudo systemctl daemon-reload
-sudo systemctl enable --now neighwatch
-journalctl -u neighwatch -f -o cat
-```
+---
 
 ## LIMITATIONS
 
-- Supports classic `.pcap` (microsecond and nanosecond magics); `.pcapng` is not yet parsed directly.
-- Requires `DLT_EN10MB` (Ethernet) link type; loopback (`DLT_NULL`) and cooked captures (`LINUX_SLL`) are rejected.
-- No IPv6 Neighbor Discovery (`ICMPv6` 135/136) yet.
+- **Link-Type Restrictions:** Requires `DLT_EN10MB` (Ethernet, datalink type 1). Captures on loopback (`DLT_NULL`) or Linux cooked interfaces (`LINUX_SLL`) fail fast with exit code `2`.
+- **Capture Formats:** Currently decodes classic `.pcap` files (microsecond and nanosecond timestamps). Direct `.pcapng` block decoding is queued for Day 3 (`#4`).
+- **Protocols:** Currently parses IPv4 ARP. IPv6 Neighbor Discovery Protocol (NDP `NS`/`NA`) is queued for Day 4 (`#3`).
 
-## TODO
+---
 
-- Add `.pcapng` interface block parsing or clean fallback (`#4`).
-- Add IPv6 NDP (`NS`/`NA`) and `DAD` (`::`) handling (`#3`).
+## ROADMAP & SPRINT STATUS
+
+- [x] Day 1: PoC, classic PCAP reader, RFC 5227 probe exclusion, sliding-window gratuitous flood detection, state persistence, TTL eviction, and Linux native `AF_PACKET` capture (`#1`, `#2`, `#6` closed).
+- [x] Day 2: Modular package extraction (`neighwatch/`), standard packaging (`pyproject.toml`), and 23-test deterministic `pytest` suite (`#5` closed).
+- [ ] Day 3: Zero-dependency `.pcapng` block decoder (`#4`).
+- [ ] Day 4: IPv6 NDP (`NS`/`NA`) and DAD (`::`) protocol parsing, release tag `v0.1.0` (`#3`).
