@@ -2,6 +2,10 @@
   <img src="assets/header.svg" alt="neighwatch - Passive Layer 2 ARP Neighbor Monitor and Spoof Detector" width="100%" />
 </p>
 
+<p align="center">
+  <img src="assets/logo.svg" alt="neighwatch logo" width="80" height="80" />
+</p>
+
 ## OVERVIEW
 
 `neighwatch` is a passive Layer 2 ARP neighbor monitor and spoof detector. It inspects Ethernet and ARP wire frames, tracks an in-memory `IP -> MAC` binding table, evaluates packet-timestamp sliding windows for gratuitous ARP floods, and emits normalized JSONL events to `stdout`.
@@ -18,35 +22,9 @@
 
 ## ARCHITECTURE
 
-```
-                  +-----------------------------------+
-                  |   Capture Source (pcap / live)    |
-                  +-----------------------------------+
-                                    |
-                                    v
-+-------------------------------------------------------------------------+
-| neighwatch.parser: parse_ethernet_arp()                                 |
-| - Link-type validation (DLT_EN10MB)                                     |
-| - 802.1Q / 802.1ad VLAN unwrapping (up to 2 tags)                       |
-| - Fixed 28-byte ARP header unpacking                                    |
-| - Trailing 60-byte Ethernet padding truncation                          |
-+-------------------------------------------------------------------------+
-                                    |
-                                    v
-+-------------------------------------------------------------------------+
-| neighwatch.table: NeighborTable.process_frame()                         |
-| - RFC 5227 probe filtering (0.0.0.0)                                    |
-| - Hardware address invariant checks (eth_src == sha)                    |
-| - In-memory binding state machine (first_seen, last_seen)               |
-| - Sliding-window gratuitous flood counter (neighwatch.window)           |
-| - Packet-timestamp TTL eviction (prune_stale)                           |
-+-------------------------------------------------------------------------+
-                                    |
-                                    v
-                  +-----------------------------------+
-                  |    Structured JSONL Output Stream |
-                  +-----------------------------------+
-```
+<p align="center">
+  <img src="assets/architecture.svg" alt="neighwatch - Layer 2 Pipeline Architecture" width="100%" />
+</p>
 
 ### Event Schema
 

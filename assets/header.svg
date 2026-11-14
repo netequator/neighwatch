@@ -35,7 +35,7 @@
   </text>
 
   <text x="34" y="174" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace" font-size="11.5" fill="#8b949e">
-    native AF_PACKET / Npcap / JSONL events / sliding flood windows / zero-dependency Linux
+    AF_PACKET / Npcap / PCAP &amp; PCAPNG / JSONL events / zero-dependency Linux
   </text>
 
   <!-- Right Inspector Card -->

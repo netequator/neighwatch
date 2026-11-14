@@ -120,3 +120,15 @@
 - `ruff check neighwatch tests`: passed (`0` errors).
 - `pytest tests/ -v`: 30 passed in 0.57s.
 - Tested: little/big-endian PCAPNG parsing, multiple interface definitions, custom `if_tsresol` scales, unhandled block skipping, and end-to-end PCAPNG replay with state tracking.
+
+
+## 2026-11-14 — Visual Documentation Pipeline Architecture
+
+### Design Notes
+- Created `assets/architecture.svg` (840x380 dark-mode vector pipeline diagram) displaying:
+  - Ingestion Layer: Linux AF_PACKET, Windows Npcap, classic PCAP, and PCAPNG.
+  - Wire Decoder: LinkType validation, 802.1Q unwrap, 28-byte ARP header unpacking, and padding truncation.
+  - State Tracker & Invariant Checks: RFC 5227 probe quarantine, eth_src == sha check, NeighborTable, and SlidingWindowCounter flood window.
+  - Telemetry Output: JSONL stdout, atomic state.json, journald, and SIEM pipeline integrations.
+- Embedded `assets/architecture.svg` and centered `assets/logo.svg` into `README.md`.
+- Updated `assets/header.svg` with PCAPNG ingestion support.
