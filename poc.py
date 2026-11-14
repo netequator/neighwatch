@@ -18,7 +18,9 @@ from neighwatch import (
 )
 from neighwatch.capture import (
     PCAP_MAGICS,
+    iter_capture,
     iter_classic_pcap,
+    iter_pcapng,
     resolve_scapy_datalink,
     run_live,
     run_live_native_linux,
@@ -37,7 +39,9 @@ __all__ = [
     "SlidingWindowCounter",
     "format_mac",
     "format_ts",
+    "iter_capture",
     "iter_classic_pcap",
+    "iter_pcapng",
     "main",
     "make_event",
     "parse_args",

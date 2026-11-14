@@ -102,3 +102,21 @@
   - Added ASCII architectural pipeline diagram mapping frame ingestion to structured JSONL streaming.
   - Documented complete normalized JSONL event schema and event type classification table.
   - Added step-by-step unprivileged Linux deployment guide with ambient `CAP_NET_RAW` systemd units and `journalctl` query examples.
+
+
+## 2026-11-14 — Issue #4: Zero-Dependency PCAPNG Block Decoder
+
+### Design Notes
+- Added pure Python standard library `.pcapng` block decoder (`iter_pcapng`) in `neighwatch/capture.py`:
+  - Section Header Block (`0x0A0D0D0A`): Resolves byte order dynamically per section via BOM (`0x1A2B3C4D` -> little-endian `0x4d3c2b1a`, big-endian `0x1a2b3c4d`), resetting interface tables on each new section.
+  - Interface Description Block (`IDB`, type `0x00000001`): Extracts per-interface LinkType and SnapLen. Parses optional `if_tsresol` (option code 9) supporting both powers of 10 (`10^-N`) and powers of 2 (`2^-N`) with default fallback to microsecond resolution (`1e-6`).
+  - Enhanced Packet Block (`EPB`, type `0x00000006`): Unpacks interface index, 64-bit split timestamp (`ts_high << 32 | ts_low`), packet lengths, and 32-bit alignment padding.
+  - Simple Packet Block (`SPB`, type `0x00000003`): Unpacks payload with default interface assignment.
+  - Unhandled Block Skipping: Safely advances stream pointer past unhandled blocks (e.g. Interface Statistics Block `0x00000005`, Custom Blocks) using Total Block Length.
+- Integrated transparent unified stream reader (`iter_capture`), automatically dispatching between classic `.pcap` and `.pcapng` based on initial capture magic.
+- Expanded `NeighborTable` and `run_pcap()` to process `.pcapng` offline replays transparently.
+
+### Verification
+- `ruff check neighwatch tests`: passed (`0` errors).
+- `pytest tests/ -v`: 30 passed in 0.57s.
+- Tested: little/big-endian PCAPNG parsing, multiple interface definitions, custom `if_tsresol` scales, unhandled block skipping, and end-to-end PCAPNG replay with state tracking.

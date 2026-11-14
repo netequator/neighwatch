@@ -2,6 +2,13 @@
 
 from __future__ import annotations
 
+from neighwatch.capture import (
+    iter_capture,
+    iter_classic_pcap,
+    iter_pcapng,
+    run_live,
+    run_pcap,
+)
 from neighwatch.parser import (
     DLT_EN10MB,
     ETHERTYPE_ARP,
@@ -25,6 +32,11 @@ __all__ = [
     "SlidingWindowCounter",
     "format_mac",
     "format_ts",
+    "iter_capture",
+    "iter_classic_pcap",
+    "iter_pcapng",
     "make_event",
     "parse_ethernet_arp",
+    "run_live",
+    "run_pcap",
 ]

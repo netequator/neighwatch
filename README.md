@@ -107,12 +107,12 @@ Ensure Npcap is installed with "WinPcap API-compatible mode" enabled.
 
 ## USAGE
 
-### 1. Offline Classic PCAP Replay
+### 1. Offline PCAP & PCAPNG Replay
 
-Replay an existing packet capture with pure stdlib stream decoding:
+Replay an existing packet capture (classic `.pcap` or modern `.pcapng` from Wireshark / `dumpcap`) with pure stdlib stream decoding:
 
 ```sh
-neighwatch --pcap capture.pcap
+neighwatch --pcap capture.pcapng
 # or:
 python3 -m neighwatch --pcap capture.pcap
 ```
@@ -226,7 +226,7 @@ The test harness uses synthetic binary frame generation (`struct.pack`) across 4
 ## LIMITATIONS
 
 - **Link-Type Restrictions:** Requires `DLT_EN10MB` (Ethernet, datalink type 1). Captures on loopback (`DLT_NULL`) or Linux cooked interfaces (`LINUX_SLL`) fail fast with exit code `2`.
-- **Capture Formats:** Currently decodes classic `.pcap` files (microsecond and nanosecond timestamps). Direct `.pcapng` block decoding is queued for Day 3 (`#4`).
+- **Capture Formats:** Supports classic `.pcap` (microsecond and nanosecond timestamps) and `.pcapng` (SHB, IDB, EPB, SPB).
 - **Protocols:** Currently parses IPv4 ARP. IPv6 Neighbor Discovery Protocol (NDP `NS`/`NA`) is queued for Day 4 (`#3`).
 
 ---
@@ -235,5 +235,5 @@ The test harness uses synthetic binary frame generation (`struct.pack`) across 4
 
 - [x] Day 1: PoC, classic PCAP reader, RFC 5227 probe exclusion, sliding-window gratuitous flood detection, state persistence, TTL eviction, and Linux native `AF_PACKET` capture (`#1`, `#2`, `#6` closed).
 - [x] Day 2: Modular package extraction (`neighwatch/`), standard packaging (`pyproject.toml`), and 23-test deterministic `pytest` suite (`#5` closed).
-- [ ] Day 3: Zero-dependency `.pcapng` block decoder (`#4`).
+- [x] Day 3: Zero-dependency `.pcapng` block decoder (`#4` closed).
 - [ ] Day 4: IPv6 NDP (`NS`/`NA`) and DAD (`::`) protocol parsing, release tag `v0.1.0` (`#3`).
