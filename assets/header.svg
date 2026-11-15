@@ -27,11 +27,11 @@
 
   <text x="34" y="112" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif">
     <tspan font-size="32" font-weight="700" fill="#f0f6fc">neighwatch</tspan>
-    <tspan dx="10" font-size="14" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace" fill="#58a6ff">v0.1.0.dev0</tspan>
+    <tspan dx="10" font-size="14" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace" fill="#58a6ff">v0.1.0</tspan>
   </text>
 
   <text x="34" y="142" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="15" font-weight="500" fill="#c9d1d9">
-    Passive Layer 2 ARP Neighbor Monitor &amp; Spoof Detector
+    Passive Layer 2 ARP &amp; IPv6 NDP Neighbor Monitor
   </text>
 
   <text x="34" y="174" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace" font-size="11.5" fill="#8b949e">
@@ -46,13 +46,13 @@
     <text x="618" y="76" fill="#e6edf3">DLT_EN10MB (Ethernet)</text>
 
     <text x="542" y="98" fill="#6e7681">PROTOCOL</text>
-    <text x="618" y="98" fill="#e6edf3">ARP (0x0806) + 802.1Q</text>
+    <text x="618" y="98" fill="#e6edf3">ARP / IPv6 NDP (RFC 4861)</text>
 
     <text x="542" y="120" fill="#6e7681">PARSER</text>
     <text x="618" y="120" fill="#3fb950">Pure Stdlib struct</text>
 
     <text x="542" y="142" fill="#6e7681">SECURITY</text>
-    <text x="618" y="142" fill="#58a6ff">RFC 5227 / HW Verify</text>
+    <text x="618" y="142" fill="#58a6ff">RFC 5227 / 4862 DAD</text>
 
     <text x="542" y="164" fill="#6e7681">BACKEND</text>
     <text x="618" y="164" fill="#e6edf3">Linux AF_PACKET / Npcap</text>
