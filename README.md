@@ -40,8 +40,9 @@ Every event is serialized as a single-line JSON object with deterministic keys:
 | `src_mac` | `string|null` | Sender hardware MAC address (`sha`) |
 | `detail` | `object` | Contextual dictionary (operation, target addresses, VLAN tags, flood counters) |
 
-#### Event Types
+#### Event Types (ARP & IPv6 NDP)
 
+**IPv4 ARP Events:**
 - `arp_learned` (`info`): Newly observed valid IP-to-MAC mapping.
 - `arp_seen` (`info`): Known binding re-observed (emitted when `--all` is set).
 - `arp_mac_change` (`alert`): Known IP address claimed by a different MAC address.
@@ -52,8 +53,20 @@ Every event is serialized as a single-line JSON object with deterministic keys:
 - `arp_invalid_spa` (`warn`): ARP reply claiming sender protocol address `0.0.0.0`.
 - `arp_invalid_sha` (`warn`): ARP packet claiming broadcast (`ff:ff:ff:ff:ff:ff`), zero, or multicast MAC.
 - `arp_unexpected_op` (`warn`): ARP opcode other than `1` (`who-has`) or `2` (`is-at`).
-- `arp_expired` (`info`): Stale neighbor evicted after exceeding configured `--ttl`.
+- `arp_expired` (`info`): Stale IPv4 neighbor evicted after exceeding configured `--ttl`.
 - `arp_malformed` (`warn`): Truncated Ethernet header or undersized ARP payload.
+
+**IPv6 NDP Events:**
+- `ndp_learned` (`info`): Newly observed valid IPv6-to-MAC mapping from NS or NA.
+- `ndp_seen` (`info`): Known IPv6 binding re-observed (emitted when `--all` is set).
+- `ndp_mac_change` (`alert`): Known IPv6 address claimed by a different MAC address.
+- `ndp_hw_mismatch` (`alert`): Outer Ethernet source MAC does not match inner SLLA or TLLA option.
+- `ndp_dad_probe` (`info`): RFC 4862 Duplicate Address Detection probe (`src_ip=::`) quarantined from binding table.
+- `ndp_invalid_slla` (`warn`): RFC 4861 non-compliant SLLA option included in DAD probe.
+- `ndp_invalid_hop_limit` (`warn`): Non-local NDP frame with Hop Limit other than 255 (RFC 4861 §6.1).
+- `ndp_invalid_mac` (`warn`): NDP packet claiming broadcast, zero, or multicast MAC address.
+- `ndp_expired` (`info`): Stale IPv6 neighbor evicted after exceeding configured `--ttl`.
+- `ndp_malformed` (`warn`): Truncated IPv6 header, invalid ICMPv6 code, or zero-length option.
 
 ---
 
@@ -204,8 +217,8 @@ The test harness uses synthetic binary frame generation (`struct.pack`) across 4
 ## LIMITATIONS
 
 - **Link-Type Restrictions:** Requires `DLT_EN10MB` (Ethernet, datalink type 1). Captures on loopback (`DLT_NULL`) or Linux cooked interfaces (`LINUX_SLL`) fail fast with exit code `2`.
-- **Capture Formats:** Supports classic `.pcap` (microsecond and nanosecond timestamps) and `.pcapng` (SHB, IDB, EPB, SPB).
-- **Protocols:** Currently parses IPv4 ARP. IPv6 Neighbor Discovery Protocol (NDP `NS`/`NA`) is queued for Day 4 (`#3`).
+- **Capture Formats:** Supports classic `.pcap` (microsecond and nanosecond timestamps) and modern `.pcapng` (SHB, IDB, EPB, SPB).
+- **Protocols:** Parses IPv4 ARP and IPv6 Neighbor Discovery Protocol (ICMPv6 types 135/136). Both offline PCAP replay and live capture (native `AF_PACKET` on Linux, Npcap on Windows) decode both protocol stacks transparently.
 
 ---
 
@@ -214,4 +227,4 @@ The test harness uses synthetic binary frame generation (`struct.pack`) across 4
 - [x] Day 1: PoC, classic PCAP reader, RFC 5227 probe exclusion, sliding-window gratuitous flood detection, state persistence, TTL eviction, and Linux native `AF_PACKET` capture (`#1`, `#2`, `#6` closed).
 - [x] Day 2: Modular package extraction (`neighwatch/`), standard packaging (`pyproject.toml`), and 23-test deterministic `pytest` suite (`#5` closed).
 - [x] Day 3: Zero-dependency `.pcapng` block decoder (`#4` closed).
-- [ ] Day 4: IPv6 NDP (`NS`/`NA`) and DAD (`::`) protocol parsing, release tag `v0.1.0` (`#3`).
+- [x] Day 4: IPv6 NDP (`NS`/`NA`) and DAD (`::`) protocol parsing, release tag `v0.1.0` (`#3` closed).

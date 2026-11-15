@@ -13,16 +13,16 @@ from neighwatch.table import NeighborTable
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         prog="neighwatch",
-        description="Passive L2 ARP neighbor monitor emitting JSONL events.",
+        description="Passive L2 ARP and IPv6 NDP neighbor monitor emitting JSONL events.",
     )
     source = parser.add_mutually_exclusive_group(required=True)
-    source.add_argument("-r", "--pcap", type=Path, help="Read offline classic .pcap file.")
-    source.add_argument("-i", "--iface", help="Capture live ARP frames on interface.")
+    source.add_argument("-r", "--pcap", type=Path, help="Read offline classic .pcap or .pcapng file.")
+    source.add_argument("-i", "--iface", help="Capture live ARP and IPv6 NDP frames on interface.")
     parser.add_argument(
         "--all",
         action="store_true",
         dest="emit_unchanged",
-        help="Emit arp_seen events for unchanged known bindings.",
+        help="Emit arp_seen / ndp_seen events for unchanged known bindings.",
     )
     parser.add_argument("-c", "--count", type=int, default=0, help="Live capture frame limit (0 = unlimited).")
     parser.add_argument("-t", "--timeout", type=float, default=None, help="Live capture timeout in seconds.")

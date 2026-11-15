@@ -14,9 +14,9 @@ from neighwatch.capture import (
     iter_pcapng,
     run_pcap,
 )
-from neighwatch.parser import DLT_EN10MB
+from neighwatch.parser import DLT_EN10MB, ICMPV6_TYPE_NS, NDP_OPT_SLLA
 from neighwatch.table import NeighborTable
-from tests.test_parser import _build_arp_frame
+from tests.test_parser import _build_arp_frame, _build_ndp_frame
 
 
 def _create_pcap_bytes(
@@ -297,3 +297,36 @@ def test_run_pcap_with_pcapng(tmp_path: Path) -> None:
     count = run_pcap(pcapng_file, tracker)
     assert count == 1
     assert tracker.bindings == {"10.10.10.1": "00:aa:bb:cc:dd:ee"}
+
+
+def test_run_pcap_dual_stack_arp_and_ndp(tmp_path: Path) -> None:
+    pcapng_file = tmp_path / "dual_stack.pcapng"
+    arp_frame = _build_arp_frame(spa="192.168.1.100", sha="00:11:22:33:44:55", eth_src="00:11:22:33:44:55")
+    ndp_frame = _build_ndp_frame(
+        icmp_type=ICMPV6_TYPE_NS,
+        eth_src="00:aa:bb:cc:dd:ee",
+        src_ip="2001:db8::100",
+        target_ip="2001:db8::1",
+        opt_type=NDP_OPT_SLLA,
+        opt_mac="00:aa:bb:cc:dd:ee",
+    )
+    raw = _create_pcapng_bytes(
+        [
+            {
+                "interfaces": [{"linktype": DLT_EN10MB, "tsresol": 6}],
+                "packets": [
+                    {"iface": 0, "ts": 100.0, "data": arp_frame},
+                    {"iface": 0, "ts": 101.0, "data": ndp_frame},
+                ],
+            }
+        ]
+    )
+    pcapng_file.write_bytes(raw)
+
+    tracker = NeighborTable()
+    count = run_pcap(pcapng_file, tracker)
+    assert count == 2
+    assert tracker.bindings == {
+        "192.168.1.100": "00:11:22:33:44:55",
+        "2001:db8::100": "00:aa:bb:cc:dd:ee",
+    }

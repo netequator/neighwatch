@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import struct
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -13,10 +14,19 @@ from neighwatch.parser import (
     ARP_OP_REQUEST,
     BCAST_MAC,
     DLT_EN10MB,
+    ETH_HDR_LEN,
+    ETHERTYPE_ARP,
+    ETHERTYPE_IPV6,
+    ETHERTYPE_VLAN_8021AD,
+    ETHERTYPE_VLAN_8021Q,
+    ICMPV6_TYPE_NA,
+    ICMPV6_TYPE_NS,
+    MAX_VLAN_TAGS,
     ZERO_MAC,
     format_ts,
     make_event,
     parse_ethernet_arp,
+    parse_ethernet_ndp,
 )
 from neighwatch.window import SlidingWindowCounter
 
@@ -63,10 +73,11 @@ class NeighborTable:
         stale_ips = [ip for ip, entry in self.entries.items() if (ts - entry.last_seen) > self.ttl]
         for ip in stale_ips:
             entry = self.entries.pop(ip)
+            event_name = "ndp_expired" if ":" in ip else "arp_expired"
             events.append(
                 make_event(
                     ts,
-                    "arp_expired",
+                    event_name,
                     "info",
                     ip,
                     entry.mac,
@@ -159,12 +170,8 @@ class NeighborTable:
                 meta["flood_scope"] = "+".join(scopes)
         return triggered, in_cooldown, meta
 
-    def process_frame(self, frame: bytes, ts: float, linktype: int) -> list[dict[str, object]]:
-        if linktype != DLT_EN10MB:
-            raise ValueError(f"unsupported linktype {linktype}; expected DLT_EN10MB ({DLT_EN10MB})")
-
-        events = self.prune_stale(ts)
-
+    def _process_arp(self, frame: bytes, ts: float) -> list[dict[str, object]]:
+        events: list[dict[str, object]] = []
         pkt, err = parse_ethernet_arp(frame)
         if err is not None:
             events.append(make_event(ts, "arp_malformed", "warn", None, None, {"reason": err, "len": len(frame)}))
@@ -252,4 +259,203 @@ class NeighborTable:
         entry.last_seen = max(entry.last_seen, ts)
         if self.emit_unchanged:
             events.append(make_event(ts, "arp_seen", "info", pkt.spa, pkt.sha, base_detail))
+        return events
+
+    def _process_ndp(self, frame: bytes, ts: float) -> list[dict[str, object]]:
+        events: list[dict[str, object]] = []
+        pkt, err = parse_ethernet_ndp(frame)
+        if err is not None:
+            events.append(make_event(ts, "ndp_malformed", "warn", None, None, {"reason": err, "len": len(frame)}))
+            return events
+        if pkt is None:
+            return events
+
+        # Security invariant: RFC 4861 §6.1.1 / §6.1.2 Hop Limit MUST be 255
+        if pkt.hop_limit != 255:
+            events.append(
+                make_event(
+                    ts,
+                    "ndp_invalid_hop_limit",
+                    "warn",
+                    pkt.src_ip,
+                    pkt.eth_src,
+                    {
+                        "hop_limit": pkt.hop_limit,
+                        "expected": 255,
+                        "eth_src": pkt.eth_src,
+                        "eth_dst": pkt.eth_dst,
+                    },
+                )
+            )
+            return events
+
+        # RFC 4862 Duplicate Address Detection (DAD) probe: NS from ::
+        if pkt.is_dad:
+            detail = {
+                "op": "neighbor-solicitation",
+                "target_ip": pkt.target_ip,
+                "eth_src": pkt.eth_src,
+                "eth_dst": pkt.eth_dst,
+            }
+            if pkt.vlan_ids:
+                detail["vlan_ids"] = list(pkt.vlan_ids)
+            # RFC 4861 §4.3: SLLA option MUST NOT be present in DAD probe
+            if pkt.link_layer_addr is not None:
+                events.append(
+                    make_event(
+                        ts,
+                        "ndp_invalid_slla",
+                        "warn",
+                        pkt.src_ip,
+                        pkt.eth_src,
+                        {**detail, "slla": pkt.link_layer_addr, "reason": "slla_in_dad_probe"},
+                    )
+                )
+                return events
+            events.append(make_event(ts, "ndp_dad_probe", "info", pkt.src_ip, pkt.eth_src, detail))
+            return events
+
+        if pkt.icmp_type == ICMPV6_TYPE_NS:
+            effective_mac = (pkt.link_layer_addr or pkt.eth_src).lower()
+            detail = {
+                "op": "neighbor-solicitation",
+                "target_ip": pkt.target_ip,
+                "eth_src": pkt.eth_src,
+                "eth_dst": pkt.eth_dst,
+            }
+            if pkt.vlan_ids:
+                detail["vlan_ids"] = list(pkt.vlan_ids)
+
+            if pkt.link_layer_addr is not None and pkt.link_layer_addr.lower() != pkt.eth_src.lower():
+                events.append(
+                    make_event(
+                        ts,
+                        "ndp_hw_mismatch",
+                        "alert",
+                        pkt.src_ip,
+                        effective_mac,
+                        {**detail, "slla": pkt.link_layer_addr},
+                    )
+                )
+                return events
+
+            if effective_mac in (ZERO_MAC, BCAST_MAC) or bool(int(effective_mac.split(":")[0], 16) & 0x01):
+                events.append(make_event(ts, "ndp_invalid_mac", "warn", pkt.src_ip, effective_mac, detail))
+                return events
+
+            entry = self.entries.get(pkt.src_ip)
+            prev_mac = entry.mac if entry is not None else None
+            if prev_mac is not None and prev_mac != effective_mac:
+                entry.mac = effective_mac
+                entry.last_seen = max(entry.last_seen, ts)
+                events.append(
+                    make_event(ts, "ndp_mac_change", "alert", pkt.src_ip, effective_mac, {**detail, "prev_mac": prev_mac})
+                )
+                return events
+
+            if prev_mac is None:
+                self.entries[pkt.src_ip] = NeighborEntry(mac=effective_mac, first_seen=ts, last_seen=ts)
+                events.append(make_event(ts, "ndp_learned", "info", pkt.src_ip, effective_mac, detail))
+                return events
+
+            assert entry is not None
+            entry.last_seen = max(entry.last_seen, ts)
+            if self.emit_unchanged:
+                events.append(make_event(ts, "ndp_seen", "info", pkt.src_ip, effective_mac, detail))
+            return events
+
+        if pkt.icmp_type == ICMPV6_TYPE_NA:
+            effective_mac = (pkt.link_layer_addr or pkt.eth_src).lower()
+            detail = {
+                "op": "neighbor-advertisement",
+                "target_ip": pkt.target_ip,
+                "eth_src": pkt.eth_src,
+                "eth_dst": pkt.eth_dst,
+                "router": pkt.router_flag,
+                "solicited": pkt.solicited_flag,
+                "override": pkt.override_flag,
+            }
+            if pkt.vlan_ids:
+                detail["vlan_ids"] = list(pkt.vlan_ids)
+
+            if (
+                pkt.link_layer_addr is not None
+                and pkt.link_layer_addr.lower() != pkt.eth_src.lower()
+                and not pkt.eth_dst.lower().startswith("33:33:")
+            ):
+                events.append(
+                    make_event(
+                        ts,
+                        "ndp_hw_mismatch",
+                        "alert",
+                        pkt.target_ip,
+                        effective_mac,
+                        {**detail, "tlla": pkt.link_layer_addr},
+                    )
+                )
+                return events
+
+            if effective_mac in (ZERO_MAC, BCAST_MAC) or bool(int(effective_mac.split(":")[0], 16) & 0x01):
+                events.append(make_event(ts, "ndp_invalid_mac", "warn", pkt.target_ip, effective_mac, detail))
+                return events
+
+            entry = self.entries.get(pkt.target_ip)
+            prev_mac = entry.mac if entry is not None else None
+            if prev_mac is not None and prev_mac != effective_mac:
+                entry.mac = effective_mac
+                entry.last_seen = max(entry.last_seen, ts)
+                events.append(
+                    make_event(
+                        ts,
+                        "ndp_mac_change",
+                        "alert",
+                        pkt.target_ip,
+                        effective_mac,
+                        {**detail, "prev_mac": prev_mac},
+                    )
+                )
+                return events
+
+            if prev_mac is None:
+                self.entries[pkt.target_ip] = NeighborEntry(mac=effective_mac, first_seen=ts, last_seen=ts)
+                events.append(make_event(ts, "ndp_learned", "info", pkt.target_ip, effective_mac, detail))
+                return events
+
+            assert entry is not None
+            entry.last_seen = max(entry.last_seen, ts)
+            if self.emit_unchanged:
+                events.append(make_event(ts, "ndp_seen", "info", pkt.target_ip, effective_mac, detail))
+            return events
+
+        return events
+
+    def process_frame(self, frame: bytes, ts: float, linktype: int) -> list[dict[str, object]]:
+        if linktype != DLT_EN10MB:
+            raise ValueError(f"unsupported linktype {linktype}; expected DLT_EN10MB ({DLT_EN10MB})")
+
+        events = self.prune_stale(ts)
+
+        if len(frame) < ETH_HDR_LEN:
+            events.append(make_event(ts, "arp_malformed", "warn", None, None, {"reason": "short_ethernet_frame", "len": len(frame)}))
+            return events
+
+        _dst, _src, ethertype = struct.unpack_from("!6s6sH", frame, 0)
+        offset = ETH_HDR_LEN
+        vlan_count = 0
+        while ethertype in (ETHERTYPE_VLAN_8021Q, ETHERTYPE_VLAN_8021AD):
+            if vlan_count >= MAX_VLAN_TAGS or offset + 4 > len(frame):
+                events.append(make_event(ts, "arp_malformed", "warn", None, None, {"reason": "malformed_vlan_header", "len": len(frame)}))
+                return events
+            _tci, ethertype = struct.unpack_from("!HH", frame, offset)
+            vlan_count += 1
+            offset += 4
+
+        if ethertype == ETHERTYPE_ARP:
+            events.extend(self._process_arp(frame, ts))
+            return events
+
+        if ethertype == ETHERTYPE_IPV6:
+            events.extend(self._process_ndp(frame, ts))
+            return events
+
         return events

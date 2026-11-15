@@ -7,7 +7,11 @@ import sys
 from neighwatch import (
     DLT_EN10MB,
     ETHERTYPE_ARP,
+    ETHERTYPE_IPV6,
+    ICMPV6_TYPE_NA,
+    ICMPV6_TYPE_NS,
     ArpPacket,
+    NdpPacket,
     NeighborEntry,
     NeighborTable,
     SlidingWindowCounter,
@@ -15,6 +19,7 @@ from neighwatch import (
     format_ts,
     make_event,
     parse_ethernet_arp,
+    parse_ethernet_ndp,
 )
 from neighwatch.capture import (
     PCAP_MAGICS,
@@ -32,8 +37,12 @@ from neighwatch.cli import main, parse_args
 __all__ = [
     "DLT_EN10MB",
     "ETHERTYPE_ARP",
+    "ETHERTYPE_IPV6",
+    "ICMPV6_TYPE_NA",
+    "ICMPV6_TYPE_NS",
     "PCAP_MAGICS",
     "ArpPacket",
+    "NdpPacket",
     "NeighborEntry",
     "NeighborTable",
     "SlidingWindowCounter",
@@ -46,6 +55,7 @@ __all__ = [
     "make_event",
     "parse_args",
     "parse_ethernet_arp",
+    "parse_ethernet_ndp",
     "resolve_scapy_datalink",
     "run_live",
     "run_live_native_linux",

@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "neighwatch"
-version = "0.1.0.dev0"
-description = "Passive L2 ARP neighbor monitor and spoof detector emitting JSONL events"
+version = "0.1.0"
+description = "Passive L2 ARP and IPv6 NDP neighbor monitor and spoof detector emitting JSONL events"
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "BSD-3-Clause" }

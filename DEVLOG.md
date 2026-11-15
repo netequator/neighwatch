@@ -131,4 +131,29 @@
   - State Tracker & Invariant Checks: RFC 5227 probe quarantine, eth_src == sha check, NeighborTable, and SlidingWindowCounter flood window.
   - Telemetry Output: JSONL stdout, atomic state.json, journald, and SIEM pipeline integrations.
 - Embedded `assets/architecture.svg` and centered `assets/logo.svg` into `README.md`.
-- Updated `assets/header.svg` with PCAPNG ingestion support.
+## 2026-11-15 — Issue #3: IPv6 NDP (NS/NA) and DAD Handling (v0.1.0 Release)
+
+### Design Notes
+- Extended wire parser with `parse_ethernet_ndp` in `neighwatch/parser.py`:
+  - Decodes EtherType `0x86DD` (`ETHERTYPE_IPV6`) with 802.1Q/802.1AD VLAN peeling.
+  - Unpacks 40-byte fixed IPv6 header (`!IHBB16s16s`), validating IPv6 version `6` and Next Header `58` (`IPPROTO_ICMPV6`).
+  - Unpacks ICMPv6 header, checking `code == 0`, and filtering for Neighbor Solicitation (Type 135) and Neighbor Advertisement (Type 136).
+  - Rejects multicast target addresses (`target_raw[0] == 0xFF`) per RFC 4861 §4.3 and §4.4.
+  - Parses ICMPv6 TLV options (Source Link-Layer Address `NDP_OPT_SLLA = 1` and Target Link-Layer Address `NDP_OPT_TLLA = 2`), rejecting zero-length options and truncated byte slices.
+  - Flags NA flags: Router (R), Solicited (S), and Override (O).
+- State Machine Integration in `NeighborTable`:
+  - Enforces RFC 4861 §6.1 Hop Limit security invariant: frames with `hop_limit != 255` are dropped as potential off-link spoofing attacks (`ndp_invalid_hop_limit`).
+  - Quarantines RFC 4862 Duplicate Address Detection (`DAD`) probes sourced from `::`, emitting `ndp_dad_probe` without polluting `::` into the neighbor table or triggering false MAC change alerts. Flags RFC 4861 non-compliant SLLA options inside DAD probes as `ndp_invalid_slla`.
+  - Tracks Neighbor Solicitation `src_ip -> SLLA` bindings and Neighbor Advertisement `target_ip -> TLLA` bindings.
+  - Detects Link-Layer hardware address mismatches (`ndp_hw_mismatch`) when inner option MAC diverges from outer Ethernet source MAC.
+  - Emits `ndp_mac_change` alerts when a known IPv6 address is claimed by a new MAC address.
+  - Differentiates TTL expirations: emits `ndp_expired` for IPv6 entries and `arp_expired` for IPv4 entries.
+- Capture Engine & Packaging:
+  - Updated live Scapy/Npcap BPF filter: `arp or (vlan and arp) or icmp6 or (vlan and icmp6)`.
+  - Updated native Linux `AF_PACKET` socket to `ETH_P_ALL` (`0x0003`) with user-space protocol dispatch.
+  - Bumped version to `0.1.0` in `pyproject.toml` and `neighwatch/__init__.py`.
+
+### Verification
+- `ruff check neighwatch tests poc.py`: passed (`0` errors).
+- `pytest tests/ -v`: 48 passed in 0.22s.
+- Tested: NS parsing, NA parsing with flags, DAD probe quarantine, VLAN tags, short headers, invalid codes, zero-length options, multicast targets, non-ICMPv6 traffic, NDP learning, MAC changes, hardware mismatches, Hop Limit enforcement, TTL eviction, and dual-stack PCAPNG offline replay.

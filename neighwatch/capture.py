@@ -248,9 +248,9 @@ def run_live_native_linux(
     if not hasattr(socket, "AF_PACKET"):
         raise RuntimeError("native AF_PACKET backend is only supported on Linux")
 
-    eth_p_arp = 0x0806
+    eth_p_all = 0x0003
     try:
-        sock = socket.socket(socket.AF_PACKET, socket.SOCK_RAW, socket.htons(eth_p_arp))
+        sock = socket.socket(socket.AF_PACKET, socket.SOCK_RAW, socket.htons(eth_p_all))
     except PermissionError as exc:
         raise PermissionError(
             f"raw capture on interface {iface!r} requires CAP_NET_RAW capability or root privileges"
@@ -259,7 +259,7 @@ def run_live_native_linux(
         raise OSError(f"failed to open AF_PACKET socket: {exc}") from exc
 
     try:
-        sock.bind((iface, socket.htons(eth_p_arp)))
+        sock.bind((iface, socket.htons(eth_p_all)))
     except OSError as exc:
         sock.close()
         raise OSError(f"failed to bind to interface {iface!r}: {exc}") from exc
@@ -303,7 +303,7 @@ def run_live_scapy(iface: str, tracker: NeighborTable, count: int, timeout: floa
     if sys.platform == "win32" and not conf.use_pcap:
         raise RuntimeError("Npcap backend inactive (conf.use_pcap is False)")
 
-    bpf = "arp or (vlan and arp)"
+    bpf = "arp or (vlan and arp) or icmp6 or (vlan and icmp6)"
     try:
         # Open without BPF first; compiling "arp" on DLT_NULL loopback raises Scapy_Exception
         # ("expression rejects all packets") before we can report the datalink mismatch.
