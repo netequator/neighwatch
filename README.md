@@ -8,7 +8,11 @@
 
 ## OVERVIEW
 
-`neighwatch` is a passive Layer 2 ARP neighbor monitor and spoof detector. It inspects Ethernet and ARP wire frames, tracks an in-memory `IP -> MAC` binding table, evaluates packet-timestamp sliding windows for gratuitous ARP floods, and emits normalized JSONL events to `stdout`.
+`neighwatch` is a passive Layer 2 ARP and IPv6 NDP neighbor monitor and spoof detector. It inspects Ethernet, ARP, and ICMPv6 wire frames, tracks an in-memory `IP -> MAC` binding table, evaluates packet-timestamp sliding windows for gratuitous ARP floods, and emits normalized JSONL events to `stdout`.
+
+<p align="center">
+  <img src="assets/demo.gif" alt="neighwatch - Live Telemetry Stream" width="100%" />
+</p>
 
 ### Threat Model & Detection Surface
 

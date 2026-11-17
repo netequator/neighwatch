@@ -1,0 +1,90 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 840 370" width="840" height="370" role="img" aria-label="neighwatch - Live JSONL Telemetry Stream Terminal Demo">
+  <defs>
+    <clipPath id="terminal-body">
+      <rect x="2" y="39" width="836" height="329" rx="7"/>
+    </clipPath>
+  </defs>
+
+  <!-- Container Base -->
+  <rect x="1" y="1" width="838" height="368" rx="8" fill="#0d1117" stroke="#30363d" stroke-width="1.5"/>
+
+  <!-- Terminal Window Bar -->
+  <line x1="1" y1="39" x2="839" y2="39" stroke="#21262d" stroke-width="1"/>
+  <circle cx="24" cy="20" r="4.5" fill="#21262d" stroke="#30363d" stroke-width="1"/>
+  <circle cx="40" cy="20" r="4.5" fill="#21262d" stroke="#30363d" stroke-width="1"/>
+  <circle cx="56" cy="20" r="4.5" fill="#21262d" stroke="#30363d" stroke-width="1"/>
+  <text x="814" y="24" text-anchor="end" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace" font-size="11.5" fill="#6e7681">~/neighwatch (telemetry stream)</text>
+
+  <!-- Command Line -->
+  <g font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace" font-size="12">
+    <text x="24" y="70">
+      <tspan fill="#3fb950">$</tspan>
+      <tspan dx="8" fill="#f0f6fc">neighwatch -i eth0 --state-file state.json --ttl 86400</tspan>
+    </text>
+
+    <!-- Event 1: arp_learned (info) -->
+    <text x="24" y="105">
+      <tspan fill="#79c0ff">{"ts"</tspan><tspan fill="#c9d1d9">:"2026-11-17T06:50:01Z",</tspan>
+      <tspan fill="#79c0ff">"event"</tspan><tspan fill="#c9d1d9">:</tspan><tspan fill="#7ee787">"arp_learned"</tspan><tspan fill="#c9d1d9">,</tspan>
+      <tspan fill="#79c0ff">"src_ip"</tspan><tspan fill="#c9d1d9">:</tspan><tspan fill="#a5d6ff">"192.168.1.1"</tspan><tspan fill="#c9d1d9">,</tspan>
+      <tspan fill="#79c0ff">"src_mac"</tspan><tspan fill="#c9d1d9">:</tspan><tspan fill="#a5d6ff">"52:54:00:12:34:56"</tspan>
+      <tspan fill="#c9d1d9">}</tspan>
+    </text>
+
+    <!-- Event 2: arp_seen (info) -->
+    <text x="24" y="138">
+      <tspan fill="#79c0ff">{"ts"</tspan><tspan fill="#c9d1d9">:"2026-11-17T06:50:03Z",</tspan>
+      <tspan fill="#79c0ff">"event"</tspan><tspan fill="#c9d1d9">:</tspan><tspan fill="#7ee787">"arp_learned"</tspan><tspan fill="#c9d1d9">,</tspan>
+      <tspan fill="#79c0ff">"src_ip"</tspan><tspan fill="#c9d1d9">:</tspan><tspan fill="#a5d6ff">"192.168.1.50"</tspan><tspan fill="#c9d1d9">,</tspan>
+      <tspan fill="#79c0ff">"src_mac"</tspan><tspan fill="#c9d1d9">:</tspan><tspan fill="#a5d6ff">"00:50:56:c0:00:08"</tspan><tspan fill="#c9d1d9">,</tspan>
+      <tspan fill="#79c0ff">"vlan"</tspan><tspan fill="#c9d1d9">:</tspan><tspan fill="#d2a8ff">10</tspan>
+      <tspan fill="#c9d1d9">}</tspan>
+    </text>
+
+    <!-- Event 3: arp_mac_change (ALERT - highlight box) -->
+    <rect x="20" y="156" width="798" height="34" rx="4" fill="#f85149" fill-opacity="0.12" stroke="#f85149" stroke-width="1" stroke-opacity="0.4"/>
+    <text x="24" y="178">
+      <tspan fill="#ff7b72" font-weight="700">{"ts"</tspan><tspan fill="#c9d1d9">:"2026-11-17T06:50:08Z",</tspan>
+      <tspan fill="#ff7b72" font-weight="700">"event"</tspan><tspan fill="#c9d1d9">:</tspan><tspan fill="#ff7b72" font-weight="700">"arp_mac_change"</tspan><tspan fill="#c9d1d9">,</tspan>
+      <tspan fill="#ff7b72">"severity"</tspan><tspan fill="#c9d1d9">:</tspan><tspan fill="#ff7b72">"alert"</tspan><tspan fill="#c9d1d9">,</tspan>
+      <tspan fill="#79c0ff">"src_ip"</tspan><tspan fill="#c9d1d9">:</tspan><tspan fill="#a5d6ff">"192.168.1.1"</tspan><tspan fill="#c9d1d9">,</tspan>
+      <tspan fill="#79c0ff">"new_mac"</tspan><tspan fill="#c9d1d9">:</tspan><tspan fill="#ff7b72" font-weight="700">"de:ad:be:ef:00:01"</tspan>
+      <tspan fill="#c9d1d9">}</tspan>
+    </text>
+
+    <!-- Event 4: ndp_learned (info) -->
+    <text x="24" y="218">
+      <tspan fill="#79c0ff">{"ts"</tspan><tspan fill="#c9d1d9">:"2026-11-17T06:50:12Z",</tspan>
+      <tspan fill="#79c0ff">"event"</tspan><tspan fill="#c9d1d9">:</tspan><tspan fill="#7ee787">"ndp_learned"</tspan><tspan fill="#c9d1d9">,</tspan>
+      <tspan fill="#79c0ff">"src_ip"</tspan><tspan fill="#c9d1d9">:</tspan><tspan fill="#a5d6ff">"fe80::1"</tspan><tspan fill="#c9d1d9">,</tspan>
+      <tspan fill="#79c0ff">"src_mac"</tspan><tspan fill="#c9d1d9">:</tspan><tspan fill="#a5d6ff">"52:54:00:12:34:56"</tspan>
+      <tspan fill="#c9d1d9">}</tspan>
+    </text>
+
+    <!-- Event 5: ndp_dad_probe (info) -->
+    <text x="24" y="251">
+      <tspan fill="#79c0ff">{"ts"</tspan><tspan fill="#c9d1d9">:"2026-11-17T06:50:15Z",</tspan>
+      <tspan fill="#79c0ff">"event"</tspan><tspan fill="#c9d1d9">:</tspan><tspan fill="#58a6ff">"ndp_dad_probe"</tspan><tspan fill="#c9d1d9">,</tspan>
+      <tspan fill="#79c0ff">"target_ip"</tspan><tspan fill="#c9d1d9">:</tspan><tspan fill="#a5d6ff">"fe80::200:ff:fe00:1"</tspan><tspan fill="#c9d1d9">,</tspan>
+      <tspan fill="#79c0ff">"status"</tspan><tspan fill="#c9d1d9">:</tspan><tspan fill="#8b949e">"quarantined"</tspan>
+      <tspan fill="#c9d1d9">}</tspan>
+    </text>
+
+    <!-- Event 6: ndp_invalid_hop_limit (WARN - highlight box) -->
+    <rect x="20" y="269" width="798" height="34" rx="4" fill="#d29922" fill-opacity="0.10" stroke="#d29922" stroke-width="1" stroke-opacity="0.35"/>
+    <text x="24" y="291">
+      <tspan fill="#d29922" font-weight="700">{"ts"</tspan><tspan fill="#c9d1d9">:"2026-11-17T06:50:19Z",</tspan>
+      <tspan fill="#d29922">"event"</tspan><tspan fill="#c9d1d9">:</tspan><tspan fill="#d29922" font-weight="700">"ndp_invalid_hop_limit"</tspan><tspan fill="#c9d1d9">,</tspan>
+      <tspan fill="#79c0ff">"src_ip"</tspan><tspan fill="#c9d1d9">:</tspan><tspan fill="#a5d6ff">"fe80::bad"</tspan><tspan fill="#c9d1d9">,</tspan>
+      <tspan fill="#d29922">"hop_limit"</tspan><tspan fill="#c9d1d9">:</tspan><tspan fill="#ff7b72">64</tspan><tspan fill="#c9d1d9">,</tspan>
+      <tspan fill="#8b949e">"action":"dropped_offlink_spoof"</tspan>
+      <tspan fill="#c9d1d9">}</tspan>
+    </text>
+
+    <!-- Cursor line -->
+    <text x="24" y="334">
+      <tspan fill="#6e7681"># listening on eth0 (bpf: arp or icmp6) ...</tspan>
+      <tspan dx="10" fill="#3fb950">_</tspan>
+    </text>
+  </g>
+</svg>

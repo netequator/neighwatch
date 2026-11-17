@@ -157,3 +157,26 @@
 - `ruff check neighwatch tests poc.py`: passed (`0` errors).
 - `pytest tests/ -v`: 48 passed in 0.22s.
 - Tested: NS parsing, NA parsing with flags, DAD probe quarantine, VLAN tags, short headers, invalid codes, zero-length options, multicast targets, non-ICMPv6 traffic, NDP learning, MAC changes, hardware mismatches, Hop Limit enforcement, TTL eviction, and dual-stack PCAPNG offline replay.
+
+
+## 2026-11-17 — Terminal Demo Vector Asset & PyPI Packaging Verification
+
+### Design Notes
+- Authored `assets/demo.tape` for reproducible VHS terminal recordings (Charmbracelet spec).
+- Created `assets/demo.svg` (840x370 dark-mode vector terminal window) demonstrating:
+  - Startup with `--state-file` and `--ttl`.
+  - Color-coded `arp_learned`, `arp_seen`, and `ndp_learned` events.
+  - Highlighted `arp_mac_change` alert block (red/amber) and `ndp_invalid_hop_limit` warn block.
+  - Quarantined `ndp_dad_probe` from `::`.
+- Embedded `assets/demo.svg` directly into `README.md` below the Overview section.
+- Modernized `pyproject.toml` configuration:
+  - Switched `license = { text = "BSD-3-Clause" }` to SPDX string `license = "BSD-3-Clause"` (PEP 639 / setuptools >= 77).
+  - Removed deprecated `License :: OSI Approved :: BSD License` classifier.
+- Added `build/`, `dist/`, and `*.egg-info/` patterns to `.gitignore`.
+
+### Verification
+- Tested isolated build: `python -m build` produced `dist/neighwatch-0.1.0.tar.gz` and `dist/neighwatch-0.1.0-py3-none-any.whl` with zero warnings.
+- Tested local wheel installation: `pip install --force-reinstall dist/neighwatch-0.1.0-py3-none-any.whl`.
+- Verified binary entry point: `neighwatch --help` executed with code 0.
+- `ruff check .`: passed (`0` errors).
+- `pytest tests/ -q`: 48 passed in 0.22s.
