@@ -180,3 +180,19 @@
 - Verified binary entry point: `neighwatch --help` executed with code 0.
 - `ruff check .`: passed (`0` errors).
 - `pytest tests/ -q`: 48 passed in 0.22s.
+
+
+## 2026-11-18 — Repository Community Health & Governance Standards
+
+### Design Notes
+- Added formal repository community health files to achieve 100% profile compliance on GitHub:
+  - `LICENSE`: Standard BSD 3-Clause license text matching `pyproject.toml` SPDX definition.
+  - `SECURITY.md`: Vulnerability reporting scope, supported versions (0.1.x), and private disclosure guidelines.
+  - `CONTRIBUTING.md`: Development environment setup, minimal dependency rules, and deterministic testing standards.
+  - `CODE_OF_CONDUCT.md`: Technical merit, constructive discourse, and anti-harassment standards.
+  - `CITATION.cff`: Citation File Format 1.2.0 metadata for academic and research reference.
+
+### Verification
+- `ruff check .`: passed (`0` errors).
+- `pytest tests/`: 48 passed in 0.23s.
+

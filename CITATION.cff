@@ -1,0 +1,19 @@
+cff-version: 1.2.0
+message: "If you use this software in your research or lab work, please cite it as below."
+authors:
+  - name: "netequator"
+title: "neighwatch: Passive Layer 2 ARP & IPv6 NDP Monitor and Anomaly Detector"
+version: 0.1.0
+date-released: 2026-11-15
+url: "https://github.com/netequator/neighwatch"
+license: BSD-3-Clause
+repository-code: "https://github.com/netequator/neighwatch"
+abstract: "Zero-dependency passive Layer 2 network monitor enforcing RFC 5227 IPv4 address conflict detection and RFC 4861/4862 IPv6 neighbor discovery invariants."
+keywords:
+  - "network-security"
+  - "packet-analysis"
+  - "arp-spoofing"
+  - "ipv6-ndp"
+  - "rfc5227"
+  - "rfc4861"
+  - "pcapng"
